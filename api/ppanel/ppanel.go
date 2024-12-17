@@ -51,6 +51,7 @@ func New(apiConfig *api.Config) *APIClient {
 		ServerID: apiConfig.NodeID,
 		Secret:   apiConfig.Key,
 		Protocol: apiConfig.NodeType,
+		eTags:    make(map[string]string),
 	}
 }
 
@@ -75,6 +76,7 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 	path := "/v1/server/config"
 	resp, err := c.client.R().
 		SetHeader("If-None-Match", c.eTags["node"]).
+		ForceContentType("application/json").
 		SetResult(&config).Get(path)
 	if err != nil {
 		return nil, fmt.Errorf("request %s failed: %v", c.assembleURL(path), err)
@@ -86,6 +88,7 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 	if b, err = config.Config.MarshalJSON(); err != nil {
 		return nil, err
 	}
+	c.eTags["node"] = resp.Header().Get("ETag")
 	// parse Protocol
 	switch config.Protocol {
 	case "shadowsocks":
@@ -228,13 +231,17 @@ func (c *APIClient) parseTrojanConfig(config *Trojan) (*api.NodeInfo, error) {
 func (c *APIClient) GetUserList() (userList *[]api.UserInfo, err error) {
 	result := GetServerUserListResponse{}
 	path := "/v1/server/user"
-	resp, err := c.client.R().SetResult(&result).Get(path)
+	resp, err := c.client.R().
+		SetHeader("If-None-Match", c.eTags["user"]).
+		ForceContentType("application/json").
+		SetResult(&result).Get(path)
 	if err != nil {
 		return nil, fmt.Errorf("request %s failed: %v", c.assembleURL(path), err.Error())
 	}
 	if resp.StatusCode() == 304 {
 		return nil, errors.New(api.UserNotModified)
 	}
+	c.eTags["user"] = resp.Header().Get("ETag")
 	users := make([]api.UserInfo, 0)
 	for _, user := range result.Users {
 		u := api.UserInfo{
