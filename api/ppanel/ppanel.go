@@ -19,6 +19,7 @@ type APIClient struct {
 	ServerID int
 	Secret   string
 	Protocol string
+	eTags    map[string]string
 }
 
 func New(apiConfig *api.Config) *APIClient {
@@ -72,7 +73,9 @@ func (c *APIClient) assembleURL(path string) string {
 func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 	config := GetServerConfigResponse{}
 	path := "/v1/server/config"
-	resp, err := c.client.R().SetResult(&config).Get(path)
+	resp, err := c.client.R().
+		SetHeader("If-None-Match", c.eTags["node"]).
+		SetResult(&config).Get(path)
 	if err != nil {
 		return nil, fmt.Errorf("request %s failed: %v", c.assembleURL(path), err)
 	}
